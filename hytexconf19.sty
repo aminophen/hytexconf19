@@ -1,0 +1,87 @@
+% hytexconf19.sty by Hironobu Yamashita
+% (prepared for texconf19 abstract/slide, personal use)
+
+\NeedsTeXFormat{pLaTeX2e}
+\ProvidesPackage{hytexconf19}[2019/08/29 v1.0 texconf19 style (HY)]
+
+% load some packages
+%\RequirePackage{shortvrb}
+%\MakeShortVerb{\|}
+
+% adjust footnote mark
+% (the default style is a bit odd when used with newpx)
+\def\thefootnote{%
+  \ifnum\c@footnote>\z@%
+    \leavevmode\raise.1ex\hbox{${}^\dagger$}%
+      \raise.5ex\hbox{\@arabic\c@footnote}%
+  \fi}
+
+% logos
+\def\eTeX{$\varepsilon$-\TeX}
+%\def\pTeX{p\kern-.15em\TeX}
+\def\pTeX{p\kern-.08em\TeX}
+\def\upTeX{u\pTeX}
+\def\epTeX{$\varepsilon$-\pTeX}
+\def\eupTeX{$\varepsilon$-\upTeX}
+%\def\pLaTeX{p\kern-.05em\LaTeX}
+\def\pLaTeX{p\LaTeX}
+\def\upLaTeX{u\pLaTeX}
+%\def\pLaTeXe{p\kern-.05em\LaTeXe}
+\def\pLaTeXe{p\LaTeXe}
+\def\upLaTeXe{u\pLaTeXe}
+\DeclareRobustCommand{\JTeX}{\leavevmode
+  \lower.5ex\hbox{J}\kern-.17em\TeX}
+\DeclareRobustCommand{\JLaTeX}{\leavevmode
+  \lower.5ex\hbox{J}\kern-.05em\LaTeX}
+
+% \scsnowman
+\usepackage{scsnowman}
+% minimal svgnames from xcolor package
+\definecolor{Green}{rgb}{0,0.5,0}
+\definecolor{Brown}{rgb}{.648,.165,.165}
+\definecolor{SkyBlue}{rgb}{.53,.808,.92}
+\definecolor{DarkGoldenrod}{rgb}{.72,.525,.044}
+\def\SCSNOWMAN{\scsnowman[scale=2,adjustbaseline,
+  muffler=red,hat=Green,arms=Brown,snow=SkyBlue,buttons=DarkGoldenrod]}
+
+% twitter emoji
+\def\twemoji#1{%
+  \leavevmode\lower.25\cht\hbox{%
+    \includegraphics[width=1.2\cwd]{img/twemoji-#1.pdf}}}
+\def\notoemoji#1{%
+  \leavevmode\lower.25\cht\hbox{%
+    \includegraphics[width=1.2\cwd]{img/notoemoji_u#1.pdf}}}
+\def\SUSHI{\twemoji{1F363}}
+\def\SNOWMAN{\twemoji{26C4}}
+\def\CRYING{\twemoji{1F62D}}
+\def\LIGHTBULB{\twemoji{1F4A1}}
+\def\TEACHER{\notoemoji{1f468_1f3fb_200d_1f3eb}}
+\def\TO{{\color{red}➡︎} }
+
+% misc
+\def\file#1{\textsf{#1}}
+\def\option#1{\texttt{#1}}
+\def\code#1{\texttt{#1}}
+\def\codechar#1{\ensuremath{\langle\mbox{\code{#1}}\rangle}}
+\def\cs#1{\code{\char92 #1}}
+\xspcode"5C=3  % \
+\xspcode"3C=3  % <
+\xspcode"3E=3  % >
+\xspcode"26=3  % &
+\newcommand{\EMPH}[1]{{\bfseries #1}}% \null allows break before/after whatsit
+\newcommand{\COLOREMPH}[1]{\leavevmode\null{\bfseries\color{red} #1}\null}
+
+\newenvironment{verbnote}
+  {\par\verbnotesize\vskip-3.5ex\noindent
+   \makebox{\rule[-3ex]{\linewidth}{.4pt}}\par\nobreak}
+  {\par\noindent
+   \makebox{\rule[4ex]{\linewidth}{.4pt}}\par}
+\def\verbnotesize{\footnotesize}
+
+\font\man=manfnt at 10pt
+\def\dbend{\leavevmode\hbox{\man\char'177}}
+\def\dbendrule{\noindent\leavevmode\hbox to\linewidth
+  {\hfil\dbend\hfil\dbend\hfil\dbend\hfil}\vskip10pt}
+%%%%% all done
+
+\endinput

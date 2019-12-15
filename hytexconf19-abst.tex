@@ -1,0 +1,512 @@
+\ifx\enablecjktoken\undefined \scrollmode \expandafter\stop \fi
+
+\RequirePackage{plautopatch}
+\documentclass[paper=a4,twocolumn,line_length=24zw,number_of_lines=43]{jlreq}
+
+% place footnotes all together at the bottom of the right column
+\let\origfootnoterule\footnoterule
+\usepackage{ftnright}
+\let\footnoterule\origfootnoterule
+
+\usepackage{newpxtext,newpxmath}
+\usepackage{url}
+\usepackage{hytexconf19} % personal settings
+
+\title{\pTeX のペナルティ}
+\author{山下 弘展}
+\date{\TeX Conf 2019}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+ペナルティは，\TeX において行分割時やページ分割時に
+「その箇所がブレークポイントとしてどの程度適切であるか」を示す評価値である．
+\pTeX ではペナルティが和文組版に必須の禁則処理を実現するために
+拡張されている\cite{ptex-manual}．
+この仕様や挙動，注意すべき点について議論する．
+
+以下，\pTeX~p3.8.2 (\TeX\ Live 2019)に基づく．また，特に断らない限り
+\pTeX 系列の標準的なフォーマットでの初期設定のペナルティ値を仮定する（特に下記）．
+\begin{verbatim}
+    % 禁則ペナルティ
+    \prebreakpenalty`.=10000
+    \prebreakpenalty`。=10000
+    \postbreakpenalty`(=10000
+    \postbreakpenalty`（=10000
+    % 一文字だけの行を抑制
+    \jcharwidowpenalty=500
+\end{verbatim}
+
+
+\section{禁則処理に使われるペナルティ}
+
+欧文では連続する文字列（いわゆる単語）の途中で行分割が起こらない
+\footnote{ハイフネーション処理等の特別な場合を除く．}
+のに対し，和文ではほとんどの文字間が分割可能であり，
+その例外として\emph{禁則}（行頭禁則と行末禁則）が存在する．
+
+\pTeX は，各文字間を分割可能にするためにグルー(\cs{kanjiskip}, \cs{xkanjiskip})の
+自動挿入を行う．一方，禁則処理はペナルティによって実現されている．より詳細には
+\begin{itemize}
+  \item 禁則対象とする文字のコード
+  \item その文字に対するペナルティ値
+  \item ペナルティの挿入位置（行頭禁則ならその文字の前に挿入，行末禁則なら後）
+\end{itemize}
+を登録できる\emph{禁則テーブル}と，ここに情報を登録または削除する
+\cs{prebreakpenalty}と\cs{postbreakpenalty}というプリミティブを用意している．
+そして，\pTeX は文章を読み込むたびにその文字がテーブルに登録されているかどうかを
+調べ，登録されていればそのペナルティを文字の前後適切な位置に挿入する．
+
+\pTeX の標準的なフォーマットでは約物（句読点やカッコ類）や小書き仮名等が
+禁則テーブルに登録されているが，ユーザが自由に登録・削除・値を変更することもできる
+\footnote{削除できるようになったのはバージョンp3.8.1以降\cite{build26, build57}．}．
+ただし，いくつか注意したい点があるので，下記で議論する．
+
+\subsection{行頭禁則と行末禁則は同時指定不可}
+
+同一の文字コード\footnote{わざわざ「コード」と書いている理由はすぐ次の節参照．}に対して，
+\cs{prebreakpenalty}と\cs{postbreakpenalty}の両方を同時に与えるような
+指定はできない．もし両方指定された場合，後から指定されたものに置き換えられる．
+\begin{verbatim}
+    \prebreakpenalty`〜=10000
+    \showthe\prebreakpenalty`〜  % => 10000
+    \showthe\postbreakpenalty`〜 % => 0
+    \postbreakpenalty`〜=10000
+    \showthe\prebreakpenalty`〜  % => 0
+    \showthe\postbreakpenalty`〜 % => 10000
+\end{verbatim}
+
+\subsection{禁則の指定は文字コードに依る}
+
+禁則テーブルには和文文字と欧文文字の区別なく登録できる．
+これは，和文のみの文章中でも\codechar{、}や\codechar{。}等の和文文字以外に
+\codechar{,}や\codechar{.}等の欧文文字も約物として使われる可能性を考慮してのことであろう．
+
+ただし，登録されるのは「文字」そのものではなく「\emph{文字コード}」である．
+和文文字については内部コード（\code{-kanji-internal}の値）に依る．
+\pTeX では和文文字の内部コードは2バイト，欧文文字は1バイトであるから衝突しないが，
+内部コード\code{uptex}の\upTeX では
+和文文字\footnote{厳密には\upTeX ではCJK文字と呼ぶべきかもしれない．}の文字コードが
+欧文文字(8-bit Latin)に被ることがある．
+
+例えば，下記で``CJK''とした文字は約物に該当するが，``non-CJK''とした文字は
+アクセント付きの通常の文字である（T1エンコーディングの場合）．
+約物を禁則扱いすると，同じ文字コードを持つアクセント付き文字も禁則扱いされる
+ことに注意が必要である\cite{uptexfonts2}．
+\begin{itemize}% newpx defaults to T1
+  \item \texttt{0xA1}: \kchar"A1 (CJK) vs. \char"A1\ (non-CJK)
+  \item \texttt{0xAB}: \kchar"AB (CJK) vs. \char"AB\ (non-CJK)
+  \item \texttt{0xB7}: \kchar"B7 (CJK) vs. \char"B7\ (non-CJK)
+\end{itemize}
+
+\subsection{欧文文字に対する禁則処理}
+
+禁則テーブルには和文文字と欧文文字の区別なく登録できるが，
+実際には細かい注意が必要となる．
+
+\dbendrule
+
+以下では\pTeX がボックスを構築する様子を明らかにするため，
+\cs{showlists}や\cs{showbox}といったプリミティブを活用する．
+ボックスの中身を完全に表示するため，最初に次のコードを実行しておくとよい．
+\begin{verbatim}
+    \tracingonline1
+    \showboxdepth10000
+    \showboxbreadth10000
+\end{verbatim}
+
+\subsubsection{禁則ペナルティの挿入タイミング}
+
+和文文字の禁則ペナルティは，その文字ノードをリストに追加する際に一緒に挿入される．
+このうち行末禁則に相当する\cs{postbreakpenalty}は
+「現在のリストの最後」になりうるため，和文文字の\cs{postbreakpenalty}は
+\cs{lastpenalty}で値を取得できるし，\cs{unpenalty}で取り除くこともできる．
+行頭禁則にあたる\cs{prebreakpenalty}は原理的に必ず後ろに文字ノードを伴うため，
+いったん挿入されればその値を取得したり取り除いたりすることはできない．
+
+例として，\upTeX で\verb+\font\x=upjisr-h \x+を実行し，
+和文フォントに\code{upjisr-h}を選択した場合．
+\begin{itemize}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{です。\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \x で
+ \x す
+ \penalty 10000(for kinsoku)
+ \x 。
+ \glue(refer from jfm) 5.0
+\end{verbatim}
+\end{verbnote}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{まず（\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \x ま
+ \x ず
+ \glue(refer from jfm) 5.0 minus 5.0
+ \x （
+ \penalty 10000(for kinsoku)
+\end{verbatim}
+\end{verbnote}
+\end{itemize}
+
+一方，欧文文字の禁則ペナルティは，禁則対象の欧文文字が和文文字と
+隣り合う場合にのみ挿入される．つまり，欧文のみの組版では挿入されず，
+\pTeX はオリジナルの\TeX と同様に振る舞うことになる．
+\begin{itemize}
+  \item 欧文文字直後が和文文字の場合に限り，
+    その欧文文字に対する\cs{postbreakpenalty}を挿入する．
+  \item 欧文文字直前が和文文字の場合に限り，
+    その欧文文字に対する\cs{prebreakpenalty}を挿入する．
+\end{itemize}
+以下は，上記に続いて\verb+\font\A=cmr10 \A+を実行し，
+欧文フォントに\code{cmr10}を選択した場合．
+\begin{itemize}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{Text end.\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \A T
+ \kern-0.83334
+ \A e
+ \A x
+ \A t
+ \glue 3.33333 plus 1.66666 minus 1.11111
+ \A e
+ \A n
+ \A d
+ \A .
+\end{verbatim}
+\end{verbnote}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{終わり.\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \x 終
+ \x わ
+ \x り
+ \penalty 10000(for kinsoku)
+ \A .
+\end{verbatim}
+\end{verbnote}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{(begin\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \A (
+ \A b
+ \kern0.27779
+ \A e
+ \A g
+ \A i
+ \A n
+\end{verbatim}
+\end{verbnote}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{(始まり\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \A (
+ \penalty 10000(for kinsoku)
+ \x 始
+ \x ま
+ \x り
+\end{verbatim}
+\end{verbnote}
+\end{itemize}
+
+隣接する文字が重要であることから，欧文文字に対する
+\cs{postbreakpenalty}の挿入はその文字ノードと同時ではなく，
+後続の和文文字ノード追加時に起こる．このタイミングのズレにより，
+欧文文字に対する\cs{postbreakpenalty}は\cs{lastpenalty}で取得できないし，
+\cs{unpenalty}で取り除くこともできない．
+
+\subsubsection{グループ境界での禁則ペナルティ}
+
+欧文文字の禁則ペナルティは，禁則対象の欧文文字と和文文字が隣接する
+場合にのみ挿入される…はずであるが，現在の\pTeX では
+グループ境界で隔てられた場合にペナルティが入ったり入らなかったりする．
+まずは\verb+\ybaselineshift=0pt+の場合：
+\begin{itemize}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{(漢({漢}{(}漢\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \displace 0.0
+ \A (
+ \penalty 10000(for kinsoku)
+ \x 漢
+ \A (
+ \penalty 10000(for kinsoku)
+ \x 漢
+ \A (
+ \penalty 10000(for kinsoku)
+ \x 漢
+\end{verbatim}
+\end{verbnote}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{漢.{漢}.漢{.}\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \displace 0.0
+ \x 漢
+ \penalty 10000(for kinsoku)
+ \A .
+ \x 漢
+ \A .
+ \x 漢
+ \A .
+\end{verbatim}
+\end{verbnote}
+\end{itemize}
+このように，欧文文字の\cs{postbreakpenalty}は問題なさそうだが，
+\cs{prebreakpenalty}はグループ境界が挟まると挿入されていない．
+
+次に\verb+\ybaselineshift=3pt+の場合：
+\begin{itemize}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{(漢({漢}{(}漢\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \displace 3.0
+ \A (
+ \penalty 10000(for kinsoku)
+ \displace 0.0
+ \x 漢
+ \displace 3.0
+ \A (
+ \displace 0.0
+ \x 漢
+ \displace 3.0
+ \A (
+ \displace 0.0
+ \x 漢
+\end{verbatim}
+\end{verbnote}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{漢.{漢}.漢{.}\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \displace 0.0
+ \x 漢
+ \penalty 10000(for kinsoku)
+ \displace 3.0
+ \A .
+ \displace 0.0
+ \x 漢
+ \displace 3.0
+ \A .
+ \displace 0.0
+ \x 漢
+ \displace 3.0
+ \A .
+ \displace 0.0
+\end{verbatim}
+\end{verbnote}
+\end{itemize}
+
+ここで\verb+\displace+は和欧文のベースライン補正を実現するノードを示し，
+\verb+\displace 3.0+は垂直下に3.0\,ptだけシフトし，\verb+\displace 0.0+で
+元の位置に戻している．今度は，欧文文字の\cs{postbreakpenalty}も
+\cs{prebreakpenalty}も，グループ境界が挟まる場合に挿入失敗している\cite{build85}．
+
+\subsubsection{リガチャに対する禁則ペナルティ}
+
+\font\Q=cmr10
+欧文のリガチャといえば
+\begin{itemize}
+  \item $\codechar{f}+\codechar{i}$で{\Q f{}iではなくfi}
+  \item $\codechar{f}+\codechar{f}+\codechar{i}$で{\Q f{}f{}iではなくffi}
+\end{itemize}
+のような例がよく想起されるが，他にも
+\begin{itemize}
+  \item $\codechar{'}+\codechar{'}$で {\Q ''}
+  \item $\codechar{`}+\codechar{`}$で {\Q ``}
+\end{itemize}
+のように約物類もいくつか該当する
+（以上，\code{\fontname\Q}すなわちComputer Modernの例）．
+しかし，リガチャに禁則ペナルティを正しく設定するのは難しい．
+\begin{itemize}
+  \item \cs{postbreakpenalty}はリガチャ自体の文字コードから決まる．
+  \item \cs{prebreakpenalty}はリガチャ自体ではなく，その構成要素の
+    最初の要素から決まる．
+\end{itemize}
+
+後者の\cs{prebreakpenalty}について，\upLaTeX で例を見てみよう．
+T1エンコーディングで$\codechar{>}+\codechar{>}$は合字\codechar{»}を作るが，
+これはフォントでは \verb|^^T| の位置，Unicodeでは \verb|U+00BB| にあたる．
+\begin{verbatim}
+    \usepackage[utf8]{inputenc} % LaTeX 既定
+    \usepackage[T1]{fontenc}
+    \prebreakpenalty`\^^T=2560
+    \prebreakpenalty`\>=128
+\end{verbatim}
+ここで次の入力を考えると，以下の出力が得られる．
+\begin{itemize}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\hbox{あ>> い\char`\^^T う»}+\\\verb+\showbox0+
+\begin{verbnote}
+\begin{verbatim}
+ .\displace 0.0
+ .\x あ
+ .\penalty 128(for kinsoku)
+ .\glue(\xkanjiskip) 2.5 plus 2.5 minus 1.25
+ .\A ^^T (ligature >>)
+ .\glue 2.5 plus 1.99997 minus 1.00006
+ .\x い
+ .\penalty 2560(for kinsoku)
+ .\A ^^T
+ .\x う
+ .\penalty 2560(for kinsoku)
+ .\A ^^T
+\end{verbatim}
+\end{verbnote}
+\end{itemize}
+このように，文字コードから直接指定された\codechar{»}の前（\code{い}の後）と
+UTF-8入力で得た\codechar{»}の前（\code{う}の後）には
+リガチャ自体の文字コードに設定された禁則ペナルティ2560が挿入されているが，
+$\codechar{>}+\codechar{>}$から生成した\codechar{»}の前（\code{あ}の後）には
+\codechar{>}に設定された禁則ペナルティ128が挿入されている．
+つまり，すべての\codechar{»}を行頭禁則にするためには
+{\catcode`\^=12 \codechar{>}と\codechar{^^T}}の両方に
+\cs{prebreakpenalty}を設定しなければならないことになる
+（\cs{postbreakpenalty}ではこのような不統一は起きないようである）．
+
+欧文文字のリガチャに関しては，\pTeX において他にも
+「\cs{xkanjiskip}の挿入可否(\cs{xspcode})」
+でも問題になる．こちらもリガチャの構成要素から決まるようであり，
+議論を要する\cite{build85}．
+
+\subsection{和文文字に対する禁則処理}
+
+\pTeX には，和文文字の禁則処理についてもいくつかの課題が残っている．
+
+\subsubsection{和文文字の禁則ペナルティ取得}
+
+先に書いた
+\begin{quote}
+和文文字の\cs{postbreakpenalty}は\cs{lastpenalty}で値を取得できるし，
+\cs{unpenalty}で取り除くこともできる
+\end{quote}
+についても，少々デリケートな挙動が存在する．
+
+例えば，\pLaTeX の標準クラス(\file{jarticle.cls})や
+\upLaTeX の標準クラス(\file{ujarticle.cls})，
+\file{jsarticle.cls}などでは以下のようにして\codechar{（}の後に挿入された
+\cs{postbreakpenalty}を取得・削除できる．
+\begin{itemize}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{あ（\showthe\lastpenalty}+\\
+    \verb+% => 10000.+
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{あ（\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \x あ
+ \glue(refer from jfm) 5.0 minus 5.0
+ \x （
+ \penalty 10000(for kinsoku)
+\end{verbatim}
+\end{verbnote}
+  % \font\x=upjisr-h \x
+  \item \verb+\setbox0=\vbox{あ（\unpenalty\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \x あ
+ \glue(refer from jfm) 5.0 minus 5.0
+ \x （
+\end{verbatim}
+\end{verbnote}
+\end{itemize}
+
+ところが，\file{jlreq.cls}ではうまくいかない．
+\begin{itemize}
+  % \font\X=ujlreq \X
+  \item \verb+\setbox0=\vbox{あ（\showthe\lastpenalty}+\\
+    \verb+% => 0.+
+  % \font\X=ujlreq \X
+  \item \verb+\setbox0=\vbox{あ（\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \X あ
+ \glue(refer from jfm) 5.0 minus 5.0
+ \X （
+ \penalty 10000(for kinsoku)
+ \glue(refer from jfm) 0.0
+\end{verbatim}
+\end{verbnote}
+  % \font\X=ujlreq \X
+  \item \verb+\setbox0=\vbox{あ（\unpenalty\showlists}+
+\begin{verbnote}
+\begin{verbatim}
+ \X あ
+ \glue(refer from jfm) 5.0 minus 5.0
+ \X （
+ \penalty 10000(for kinsoku)
+ \glue(refer from jfm) 0.0
+\end{verbatim}
+\end{verbnote}
+\end{itemize}
+これはリストを見ればわかるように，「現在のリストの最後」がJFMグルーと
+なってしまったためである\cite{build67}．この挙動が問題となる例として，
+\pLaTeX カーネルで脚注マクロ(\cs{footnotetext})を修正するにあたり，
+\cs{lastpenalty}と\cs{unpenalty}を使用していることが挙げられる．
+
+\subsubsection{禁則ペナルティの合算}
+
+\pTeX の\cs{prebreakpenalty}は，既にその位置にペナルティがあった場合は
+新たに発行されるのではなく，そのペナルティに合算される．
+これは「既にあったペナルティ」が\cs{penalty}プリミティブによる
+明示的なペナルティか，\cs{postbreakpenalty}由来の自動挿入された
+禁則ペナルティかの種類によらない．そのため，
+\cs{break}すなわち\cs{penalty -10000}の直後が行頭禁則文字
+（例えば\cs{prebreakpenalty}が10000）である場合は$-10000+10000=0$の合算が
+起きてしまい，結果的に\cs{break}による強制改行が効かない．
+
+\section{和文文字の孤立を防ぐペナルティ}
+
+本講演では時間の制約上取り扱わないが，
+講演タイトルが「\pTeX のペナルティ」であるので，トピックだけを挙げるに留める．
+
+パラグラフの最終行が
+\begin{quote}
+このように一文字だけ孤立すると嬉しくありませ\\ん
+\end{quote}
+のように和文文字一字で孤立するのを防ぐために，
+\pTeX には\cs{jcharwidowpenalty}というペナルティが用意されている．
+このペナルティを発行する要件として，現在の\pTeX は
+「段落に6文字以上が含まれる」などの要件を課しているが，その挙動はなんとも
+不統一である\cite{build13}．さらに，\cs{jcharwidowpenalty}は本来行分割を
+抑制するためのものであるにもかかわらず，和文文字の前に\cs{jcharwidowpenalty}が
+挿入されることでかえって「その位置での行分割が起こりやすくなる」というケースも
+指摘されている\cite{qa53892}．このあたりについては引き続き議論を要する．
+
+\begin{thebibliography}{9}\footnotesize
+ \bibitem{ptex-manual} 日本語\TeX 開発コミュニティ，「\pTeX マニュアル」，\\
+  \url{TEXMFDIST/doc/ptex/ptex-manual/ptex-manual.pdf}
+ \bibitem{build26} h-kitagawa, 「禁則テーブル，\cs{inhibitxspcode}情報テーブルからのエントリ削除」，
+  2017/09/10,\\
+  \url{https://github.com/texjporg/tex-jp-build/pull/26}
+ \bibitem{build57} Man-Ting-Fang, \textit{[upTeX] Unexpected behaviour in kinsoku processing},
+  2018/04/13,\\
+  \url{https://github.com/texjporg/tex-jp-build/issues/57}
+ \bibitem{uptexfonts2} aminophen, 「中韓フォントの JFM」（2017/07/31以降のコメント），
+  2017/07/01,\\
+  \url{https://github.com/texjporg/uptex-fonts/issues/2}
+ \bibitem{build85} aminophen, 「グループ境界をはさむ時の欧文文字の禁則ペナルティ」，
+  2019/07/26,\\
+  \url{https://github.com/texjporg/tex-jp-build/issues/85}
+ \bibitem{build67} aminophen, 「\cs{prebreakpenalty} の合算と JFM グルー，\cs{lastpenalty}」，
+  2018/09/17,\\
+  \url{https://github.com/texjporg/tex-jp-build/issues/67}
+ \bibitem{build13} h-kitagawa, 「[ptex] \cs{jcharwidowpenalty} の仕様」，
+  2017/04/24,\\
+  \url{https://github.com/texjporg/tex-jp-build/issues/13}
+ \bibitem{qa53892} ZR, 「Re: upTeX における kcatcode と禁則処理の連動」，
+  2009/10/25,\\
+  \url{https://oku.edu.mie-u.ac.jp/~okumura/texfaq/qa/53892.html}
+\end{thebibliography}
+
+\end{document}
